@@ -12,7 +12,7 @@ sqlalchemy==2.0.19
 alembic==1.11.1
 python-dotenv==1.0.0
 scipy==1.11.2
-glpk==0.4.7
+# Removed glpk due to compilation issues - using CBC solver instead
 httpx==0.24.1
 asyncio-mqtt==0.11.0
 pydantic==2.1.1

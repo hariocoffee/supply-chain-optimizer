@@ -12,7 +12,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class PyomoOptimizer:
-    def __init__(self, solver_name: str = 'glpk'):
+    def __init__(self, solver_name: str = 'cbc'):
         self.solver_name = solver_name
         self.model = None
         self.solver = None
@@ -86,28 +86,30 @@ class PyomoOptimizer:
         combinations = []
         plant_demands = {}
         
-        # Group by plant to get total demand per plant
+        # Group by plant to get total demand per plant (Column C - 2024 Volume)
         for plant in data['Plant'].unique():
             plant_data = data[data['Plant'] == plant]
-            total_demand = plant_data['2024 Volume (lbs)'].iloc[0]  # Assuming consistent demand per plant
+            total_demand = plant_data['2024 Volume (lbs)'].iloc[0]  # Each plant must receive this exact volume
             plant_demands[plant] = total_demand
         
-        # Create valid combinations (plant-supplier pairs with non-zero capacity)
+        # Create valid combinations (plant-supplier pairs)
+        # Each row represents a potential supply relationship
         for _, row in data.iterrows():
             plant = row['Plant']
             supplier = row['Supplier']
-            volume_capacity = row['2024 Volume (lbs)']
+            plant_demand = row['2024 Volume (lbs)']  # Total demand for this plant
             price = row['DDP (USD)']
             
-            if volume_capacity > 0:  # Only include valid supply options
-                combinations.append({
-                    'plant': plant,
-                    'supplier': supplier,
-                    'capacity': volume_capacity,
-                    'price': price,
-                    'baseline_volume': row.get('Baseline Allocated Volume', 0),
-                    'baseline_cost': row.get('Baseline Price Paid', 0)
-                })
+            # The capacity for this supplier-plant combination is the full plant demand
+            # (the supplier could potentially supply the entire plant demand)
+            combinations.append({
+                'plant': plant,
+                'supplier': supplier,
+                'capacity': plant_demand,  # Max this supplier can supply to this plant
+                'price': price,
+                'baseline_volume': row.get('Baseline Allocated Volume', 0),
+                'baseline_cost': row.get('Baseline Price Paid', 0)
+            })
         
         plants = list(plant_demands.keys())
         suppliers = list(set([combo['supplier'] for combo in combinations]))
@@ -177,27 +179,17 @@ class PyomoOptimizer:
         def supplier_min_constraint_rule(model, supplier):
             total_supply = sum(model.allocation[p, supplier] for p in model.plants 
                              if (p, supplier) in model.combinations)
-            min_volume = opt_data['supplier_constraints'].get(supplier, {}).get('min_volume', 0)
+            min_volume = opt_data['supplier_constraints'].get(supplier, {}).get('min', 0)
             return total_supply >= min_volume
         
         def supplier_max_constraint_rule(model, supplier):
             total_supply = sum(model.allocation[p, supplier] for p in model.plants 
                              if (p, supplier) in model.combinations)
-            max_volume = opt_data['supplier_constraints'].get(supplier, {}).get('max_volume', float('inf'))
+            max_volume = opt_data['supplier_constraints'].get(supplier, {}).get('max', float('inf'))
             return total_supply <= max_volume
         
         model.supplier_min_constraint = pyo.Constraint(model.suppliers, rule=supplier_min_constraint_rule)
         model.supplier_max_constraint = pyo.Constraint(model.suppliers, rule=supplier_max_constraint_rule)
-        
-        # 4. Plant-specific constraints (if any)
-        def plant_max_constraint_rule(model, plant):
-            if plant in opt_data['plant_constraints']:
-                max_volume = opt_data['plant_constraints'][plant].get('max_volume', float('inf'))
-                return sum(model.allocation[plant, s] for s in model.suppliers 
-                          if (plant, s) in model.combinations) <= max_volume
-            return pyo.Constraint.Skip
-        
-        model.plant_max_constraint = pyo.Constraint(model.plants, rule=plant_max_constraint_rule)
         
         return model
     
@@ -252,6 +244,13 @@ class PyomoOptimizer:
         # Fill in optimized allocations
         allocations = solution['allocations']
         
+        # Calculate plant totals for split percentages
+        plant_totals = {}
+        for (plant, supplier), volume in allocations.items():
+            if plant not in plant_totals:
+                plant_totals[plant] = 0
+            plant_totals[plant] += volume
+        
         for idx, row in results_df.iterrows():
             plant = row['Plant']
             supplier = row['Supplier']
@@ -264,13 +263,24 @@ class PyomoOptimizer:
                 results_df.loc[idx, 'Optimized Price'] = optimized_price
                 results_df.loc[idx, 'Optimized Selection'] = 'X'
                 
-                # Calculate split percentage
-                plant_total = sum(allocations.get((plant, s), 0) for s in opt_data['suppliers'])
+                # Calculate split percentage based on plant total
+                plant_total = plant_totals.get(plant, 0)
                 if plant_total > 0:
                     split_percentage = (optimized_volume / plant_total) * 100
-                    results_df.loc[idx, 'Optimized Split'] = split_percentage
+                    results_df.loc[idx, 'Optimized Split'] = f"{split_percentage:.0f}%"
+                else:
+                    results_df.loc[idx, 'Optimized Split'] = "0%"
+            else:
+                # No allocation for this supplier-plant combination
+                results_df.loc[idx, 'Optimized Volume'] = 0
+                results_df.loc[idx, 'Optimized Price'] = 0
+                results_df.loc[idx, 'Optimized Selection'] = ''
+                results_df.loc[idx, 'Optimized Split'] = "0%"
         
-        # Calculate savings
+        # Calculate cost savings for each row
+        results_df['Cost Savings'] = results_df['Baseline Price Paid'] - results_df['Optimized Price']
+        
+        # Calculate total savings
         baseline_total_cost = results_df['Baseline Price Paid'].sum()
         optimized_total_cost = results_df['Optimized Price'].sum()
         total_savings = baseline_total_cost - optimized_total_cost

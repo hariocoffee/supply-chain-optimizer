@@ -1,91 +1,68 @@
 -- Create tables for the optimizer application
 
+-- Table to store data uploads
+CREATE TABLE IF NOT EXISTS data_uploads (
+    id SERIAL PRIMARY KEY,
+    file_hash VARCHAR(64) UNIQUE NOT NULL,
+    filename VARCHAR(255) NOT NULL,
+    upload_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    row_count INTEGER NOT NULL,
+    column_count INTEGER NOT NULL,
+    unique_plants INTEGER NOT NULL,
+    unique_suppliers INTEGER NOT NULL,
+    total_volume FLOAT NOT NULL,
+    data_sample JSONB
+);
+
 -- Table to store optimization runs
 CREATE TABLE IF NOT EXISTS optimization_runs (
     id SERIAL PRIMARY KEY,
-    file_hash VARCHAR(64) UNIQUE NOT NULL,
-    file_name VARCHAR(255) NOT NULL,
-    upload_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    status VARCHAR(50) DEFAULT 'pending',
-    total_savings DECIMAL(15,2),
-    optimization_timestamp TIMESTAMP,
-    constraints_json TEXT,
-    results_json TEXT
+    file_hash VARCHAR(64) NOT NULL,
+    run_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    supplier_constraints JSONB,
+    plant_constraints JSONB,
+    optimization_status VARCHAR(50) DEFAULT 'pending',
+    total_savings FLOAT,
+    savings_percentage FLOAT,
+    execution_time FLOAT,
+    airflow_dag_run_id VARCHAR(255)
 );
 
--- Table to store baseline data
-CREATE TABLE IF NOT EXISTS baseline_data (
+-- Table to store optimization results
+CREATE TABLE IF NOT EXISTS optimization_results (
     id SERIAL PRIMARY KEY,
-    run_id INTEGER REFERENCES optimization_runs(id),
-    plant VARCHAR(255) NOT NULL,
-    product VARCHAR(255) NOT NULL,
-    volume_lbs BIGINT NOT NULL,
-    supplier VARCHAR(255) NOT NULL,
-    plant_location VARCHAR(255) NOT NULL,
-    ddp_price DECIMAL(10,2) NOT NULL,
-    baseline_allocated_volume BIGINT,
-    baseline_price_paid DECIMAL(15,2),
-    selection VARCHAR(10),
-    split_percentage DECIMAL(5,2)
+    optimization_run_id INTEGER NOT NULL,
+    plant VARCHAR(100) NOT NULL,
+    supplier VARCHAR(100) NOT NULL,
+    baseline_volume FLOAT NOT NULL,
+    optimized_volume FLOAT NOT NULL,
+    baseline_cost FLOAT NOT NULL,
+    optimized_cost FLOAT NOT NULL,
+    cost_savings FLOAT NOT NULL,
+    volume_split FLOAT NOT NULL,
+    selection_flag BOOLEAN DEFAULT FALSE
 );
 
--- Table to store optimized results
-CREATE TABLE IF NOT EXISTS optimized_results (
+-- Table for caching entries
+CREATE TABLE IF NOT EXISTS cache_entries (
     id SERIAL PRIMARY KEY,
-    run_id INTEGER REFERENCES optimization_runs(id),
-    plant VARCHAR(255) NOT NULL,
-    product VARCHAR(255) NOT NULL,
-    volume_lbs BIGINT NOT NULL,
-    supplier VARCHAR(255) NOT NULL,
-    plant_location VARCHAR(255) NOT NULL,
-    ddp_price DECIMAL(10,2) NOT NULL,
-    optimized_volume BIGINT,
-    optimized_price DECIMAL(15,2),
-    optimized_selection VARCHAR(10),
-    optimized_split DECIMAL(5,2),
-    cost_savings DECIMAL(15,2)
-);
-
--- Table to store supplier constraints
-CREATE TABLE IF NOT EXISTS supplier_constraints (
-    id SERIAL PRIMARY KEY,
-    run_id INTEGER REFERENCES optimization_runs(id),
-    supplier VARCHAR(255) NOT NULL,
-    min_volume BIGINT NOT NULL,
-    max_volume BIGINT NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
--- Table to store plant constraints
-CREATE TABLE IF NOT EXISTS plant_constraints (
-    id SERIAL PRIMARY KEY,
-    run_id INTEGER REFERENCES optimization_runs(id),
-    plant VARCHAR(255) NOT NULL,
-    max_volume BIGINT NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
--- Table for caching optimization results
-CREATE TABLE IF NOT EXISTS cache_results (
-    id SERIAL PRIMARY KEY,
-    cache_key VARCHAR(128) UNIQUE NOT NULL,
-    result_data TEXT NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    expires_at TIMESTAMP NOT NULL
+    cache_key VARCHAR(64) UNIQUE NOT NULL,
+    cached_data JSONB,
+    expiry_timestamp TIMESTAMP NOT NULL,
+    access_count INTEGER DEFAULT 0,
+    last_accessed TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Create indexes for better performance
+CREATE INDEX IF NOT EXISTS idx_data_uploads_file_hash ON data_uploads(file_hash);
 CREATE INDEX IF NOT EXISTS idx_optimization_runs_file_hash ON optimization_runs(file_hash);
-CREATE INDEX IF NOT EXISTS idx_baseline_data_run_id ON baseline_data(run_id);
-CREATE INDEX IF NOT EXISTS idx_optimized_results_run_id ON optimized_results(run_id);
-CREATE INDEX IF NOT EXISTS idx_supplier_constraints_run_id ON supplier_constraints(run_id);
-CREATE INDEX IF NOT EXISTS idx_plant_constraints_run_id ON plant_constraints(run_id);
-CREATE INDEX IF NOT EXISTS idx_cache_results_expires_at ON cache_results(expires_at);
+CREATE INDEX IF NOT EXISTS idx_optimization_results_run_id ON optimization_results(optimization_run_id);
+CREATE INDEX IF NOT EXISTS idx_cache_entries_expires ON cache_entries(expiry_timestamp);
 
 -- Create function to clean expired cache entries
 CREATE OR REPLACE FUNCTION clean_expired_cache()
 RETURNS void AS $$
 BEGIN
-    DELETE FROM cache_results WHERE expires_at < CURRENT_TIMESTAMP;
+    DELETE FROM cache_entries WHERE expiry_timestamp < CURRENT_TIMESTAMP;
 END;
 $$ LANGUAGE plpgsql;

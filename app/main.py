@@ -14,6 +14,10 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
 # Import custom modules
+import sys
+import os
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'core'))
+
 from database import DatabaseManager
 from cache_manager import CacheManager
 from optimizer import PyomoOptimizer
@@ -240,68 +244,77 @@ class SupplyChainOptimizer:
 
     def show_constraints_interface(self):
         """Show the constraints setting interface."""
-        st.markdown("## 🎯 Set Constraints")
+        st.markdown("## 🎯 Automatically Detected Constraints")
         
         df = st.session_state.data
         
-        # Get unique suppliers
-        suppliers = df['Supplier'].unique()
+        # Auto-detect supplier constraints from baseline data
+        supplier_constraints = self.calculate_supplier_constraints(df)
         
-        st.markdown("### Supplier Volume Constraints")
+        # Display detected constraints
+        st.markdown("### 📊 Supplier Constraints (Auto-Detected)")
         
-        supplier_constraints = {}
+        constraint_data = []
+        for supplier, constraints in supplier_constraints.items():
+            baseline_volume = constraints['baseline_volume']
+            baseline_cost = constraints['baseline_cost']
+            constraint_data.append({
+                'Supplier': supplier,
+                'Baseline Volume (lbs)': f"{baseline_volume:,.0f}",
+                'Baseline Cost ($)': f"${baseline_cost:,.2f}",
+                'Max Volume Constraint (lbs)': f"{constraints['max']:,.0f}",
+                'Min Volume Constraint (lbs)': f"{constraints['min']:,.0f}"
+            })
         
-        for supplier in suppliers:
-            with st.container():
-                st.markdown(f"**{supplier}**")
-                col1, col2 = st.columns(2)
-                
-                with col1:
-                    min_vol = st.number_input(
-                        f"Min Volume (lbs)",
-                        min_value=0,
-                        key=f"min_{supplier}",
-                        format="%d"
-                    )
-                
-                with col2:
-                    max_vol = st.number_input(
-                        f"Max Volume (lbs)",
-                        min_value=min_vol,
-                        key=f"max_{supplier}",
-                        format="%d"
-                    )
-                
-                supplier_constraints[supplier] = {'min': min_vol, 'max': max_vol}
+        constraints_df = pd.DataFrame(constraint_data)
+        st.dataframe(constraints_df, use_container_width=True)
         
-        # Plant constraints
-        st.markdown("### Plant Maximum Volume Constraints")
-        plants = df['Plant'].unique()
-        plant_constraints = {}
+        # Info about plant requirements
+        st.markdown("### 🏭 Plant Requirements")
+        st.info("**Each plant MUST receive its full allocated volume as specified in Column C (2024 Volume).**")
         
-        for plant in plants:
-            plant_max = st.number_input(
-                f"Max Volume for {plant} (lbs)",
-                min_value=0,
-                key=f"plant_max_{plant}",
-                format="%d"
-            )
-            plant_constraints[plant] = plant_max
+        plant_requirements = df.groupby('Plant')['2024 Volume (lbs)'].first().reset_index()
+        plant_requirements['Required Volume (lbs)'] = plant_requirements['2024 Volume (lbs)'].apply(lambda x: f"{x:,.0f}")
+        st.dataframe(plant_requirements[['Plant', 'Required Volume (lbs)']], use_container_width=True)
         
-        if st.button("✅ Set Constraints", key="set_constraints"):
+        if st.button("✅ Use Auto-Detected Constraints", key="set_constraints"):
             # Store constraints in session state
             st.session_state.supplier_constraints = supplier_constraints
-            st.session_state.plant_constraints = plant_constraints
+            st.session_state.plant_constraints = {}  # No plant constraints needed
             st.session_state.constraints_set = True
             
             # Store in database
             self.db_manager.store_constraints(
                 st.session_state.file_hash,
                 supplier_constraints,
-                plant_constraints
+                {}  # No plant constraints
             )
             
-            st.success("✅ Constraints set successfully!")
+            st.success("✅ Auto-detected constraints applied successfully!")
+    
+    def calculate_supplier_constraints(self, df):
+        """Calculate supplier constraints from baseline data."""
+        supplier_constraints = {}
+        
+        # Group by supplier and sum baseline allocated volume and price
+        supplier_data = df.groupby('Supplier').agg({
+            'Baseline Allocated Volume': 'sum',
+            'Baseline Price Paid': 'sum'
+        }).reset_index()
+        
+        for _, row in supplier_data.iterrows():
+            supplier = row['Supplier']
+            baseline_volume = row['Baseline Allocated Volume']
+            baseline_cost = row['Baseline Price Paid']
+            
+            supplier_constraints[supplier] = {
+                'min': 0,  # Minimum can be 0 (supplier might not be used)
+                'max': baseline_volume,  # Maximum is current baseline allocation
+                'baseline_volume': baseline_volume,
+                'baseline_cost': baseline_cost
+            }
+        
+        return supplier_constraints
 
     def show_optimization_interface(self):
         """Show the optimization interface."""
@@ -325,32 +338,47 @@ class SupplyChainOptimizer:
                     )
                     
                     if results:
-                        st.session_state.results = results
+                        # Calculate volume reallocated
+                        baseline_total_volume = st.session_state.data['Baseline Allocated Volume'].sum()
+                        optimized_total_volume = results.get('results_dataframe', pd.DataFrame()).get('Optimized Volume', pd.Series()).sum() if 'results_dataframe' in results else 0
+                        volume_reallocated = abs(optimized_total_volume - baseline_total_volume)
+                        
+                        # Process results for compatibility
+                        processed_results = {
+                            'total_savings': results.get('total_savings', 0),
+                            'savings_percentage': results.get('savings_percentage', 0),
+                            'baseline_cost': results.get('baseline_total_cost', 0),
+                            'optimized_cost': results.get('optimized_total_cost', 0),
+                            'optimized_data': results.get('results_dataframe'),
+                            'execution_time': results.get('execution_time', 0),
+                            'dag_run_id': dag_run_id,
+                            'detailed_results': results.get('detailed_results', []),
+                            'plants_optimized': results.get('optimization_summary', {}).get('total_plants', 0),
+                            'suppliers_involved': results.get('optimization_summary', {}).get('total_suppliers', 0),
+                            'volume_redistributions': len(results.get('detailed_results', [])),
+                            'supplier_switches': len([r for r in results.get('detailed_results', []) if r.get('selection_flag')]),
+                            'volume_reallocated': volume_reallocated
+                        }
+                        
+                        st.session_state.results = processed_results
                         st.session_state.optimization_complete = True
                         
                         # Cache the results
                         self.cache_manager.cache_result(
                             st.session_state.file_hash,
-                            results
+                            processed_results
                         )
                         
                         # Store in database
                         self.db_manager.store_optimization_results(
                             st.session_state.file_hash,
-                            results
+                            processed_results
                         )
                         
                         st.success("✅ Optimization completed successfully!")
                         
-                        # Show download buttons
-                        col1, col2 = st.columns(2)
-                        with col1:
-                            if st.button("📥 Download Results", key="download_results"):
-                                self.download_results()
-                        
-                        with col2:
-                            if st.button("🤖 Generate AI Summary", key="generate_summary"):
-                                self.generate_ai_summary()
+                        # Show success message and redirect to results tab
+                        st.info("🎉 Optimization complete! Check the **Results** tab to view detailed results, download data, and generate AI summaries.")
                     else:
                         st.error("❌ Optimization failed. Please check your constraints.")
                 else:
@@ -358,16 +386,22 @@ class SupplyChainOptimizer:
 
     def download_results(self):
         """Generate and download the results file."""
-        if st.session_state.results:
+        if st.session_state.results and 'optimized_data' in st.session_state.results:
             results_df = st.session_state.results['optimized_data']
-            csv = results_df.to_csv(index=False)
-            
-            st.download_button(
-                label="Download Optimized Results",
-                data=csv,
-                file_name=f"optimized_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-                mime="text/csv"
-            )
+            if results_df is not None and not results_df.empty:
+                csv = results_df.to_csv(index=False)
+                
+                st.download_button(
+                    label="📥 Download Optimized Results CSV",
+                    data=csv,
+                    file_name=f"optimized_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                    mime="text/csv",
+                    use_container_width=True
+                )
+            else:
+                st.error("No optimization data available to download.")
+        else:
+            st.error("No optimization results available. Please run optimization first.")
 
     def generate_ai_summary(self):
         """Generate AI summary of the optimization results."""
@@ -469,75 +503,94 @@ class SupplyChainOptimizer:
             )
         
         with col4:
+            volume_reallocated = results.get('volume_reallocated', 0)
             st.metric(
                 "Volume Reallocated",
-                f"{results['volume_reallocated']:,.0f} lbs"
+                f"{volume_reallocated:,.0f} lbs"
             )
+        
+        # Download and AI Summary buttons
+        st.markdown("## 📊 Actions")
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            self.download_results()
+        
+        with col2:
+            if st.button("🤖 Generate AI Summary", key="generate_ai_summary_tab"):
+                self.generate_ai_summary()
         
         # Before/After Comparison
         st.markdown("## 📈 Before vs After Comparison")
         
-        comparison_data = results['comparison_data']
-        
-        fig = make_subplots(
-            rows=2, cols=2,
-            subplot_titles=("Cost Comparison", "Volume Distribution", "Supplier Utilization", "Savings by Plant"),
-            specs=[[{"type": "bar"}, {"type": "pie"}],
-                   [{"type": "bar"}, {"type": "bar"}]]
-        )
-        
-        # Cost comparison
-        fig.add_trace(
-            go.Bar(name="Baseline", x=["Total Cost"], y=[results['baseline_cost']]),
-            row=1, col=1
-        )
-        fig.add_trace(
-            go.Bar(name="Optimized", x=["Total Cost"], y=[results['optimized_cost']]),
-            row=1, col=1
-        )
-        
-        # Volume distribution pie chart
-        fig.add_trace(
-            go.Pie(labels=list(results['supplier_volumes'].keys()),
-                   values=list(results['supplier_volumes'].values()),
-                   name="Volume Distribution"),
-            row=1, col=2
-        )
-        
-        # Supplier utilization
-        suppliers = list(results['supplier_utilization'].keys())
-        utilization = list(results['supplier_utilization'].values())
-        
-        fig.add_trace(
-            go.Bar(name="Utilization %", x=suppliers, y=utilization),
-            row=2, col=1
-        )
-        
-        # Savings by plant
-        plants = list(results['savings_by_plant'].keys())
-        savings = list(results['savings_by_plant'].values())
-        
-        fig.add_trace(
-            go.Bar(name="Savings", x=plants, y=savings),
-            row=2, col=2
-        )
-        
-        fig.update_layout(height=800, showlegend=True)
-        st.plotly_chart(fig, use_container_width=True)
+        # Simple cost comparison chart
+        if 'baseline_cost' in results and 'optimized_cost' in results:
+            cost_comparison = {
+                'Scenario': ['Baseline', 'Optimized'],
+                'Total Cost': [results['baseline_cost'], results['optimized_cost']]
+            }
+            
+            fig = go.Figure(data=[
+                go.Bar(name='Cost Comparison', 
+                       x=cost_comparison['Scenario'], 
+                       y=cost_comparison['Total Cost'],
+                       marker_color=['#ff6b6b', '#4ecdc4'])
+            ])
+            
+            fig.update_layout(
+                title="Total Cost Comparison",
+                xaxis_title="Scenario",
+                yaxis_title="Cost ($)",
+                height=400
+            )
+            
+            st.plotly_chart(fig, use_container_width=True)
+            
+            # Show savings
+            savings = results.get('total_savings', 0)
+            savings_pct = results.get('savings_percentage', 0)
+            
+            if savings > 0:
+                st.success(f"💰 **Total Savings: ${savings:,.2f} ({savings_pct:.1f}%)**")
+            elif savings < 0:
+                st.warning(f"⚠️ **Additional Cost: ${abs(savings):,.2f} ({abs(savings_pct):.1f}%)**")
+            else:
+                st.info("ℹ️ **No cost difference between baseline and optimized scenarios**")
+        else:
+            st.warning("Cost comparison data not available.")
         
         # Detailed Changes Table
-        st.markdown("## 📋 Detailed Changes")
+        st.markdown("## 📋 Detailed Optimization Results")
         
-        changes_df = results['changes_summary']
-        
-        # Highlight savings in green
-        def highlight_savings(val):
-            if isinstance(val, (int, float)) and val > 0:
-                return 'background-color: #d4edda; color: #155724;'
-            return ''
-        
-        styled_df = changes_df.style.applymap(highlight_savings, subset=['Cost Savings'])
-        st.dataframe(styled_df, use_container_width=True)
+        if 'optimized_data' in results and results['optimized_data'] is not None:
+            optimized_df = results['optimized_data']
+            
+            # Show key columns
+            display_columns = [
+                'Plant', 'Supplier', '2024 Volume (lbs)', 'DDP (USD)',
+                'Baseline Allocated Volume', 'Baseline Price Paid',
+                'Optimized Volume', 'Optimized Price', 'Optimized Selection', 'Optimized Split'
+            ]
+            
+            # Filter to only show available columns
+            available_columns = [col for col in display_columns if col in optimized_df.columns]
+            display_df = optimized_df[available_columns]
+            
+            # Format numerical columns
+            if 'Baseline Price Paid' in display_df.columns:
+                display_df['Baseline Price Paid'] = display_df['Baseline Price Paid'].apply(lambda x: f"${x:,.2f}" if pd.notnull(x) else "$0.00")
+            if 'Optimized Price' in display_df.columns:
+                display_df['Optimized Price'] = display_df['Optimized Price'].apply(lambda x: f"${x:,.2f}" if pd.notnull(x) else "$0.00")
+            if 'Optimized Volume' in display_df.columns:
+                display_df['Optimized Volume'] = display_df['Optimized Volume'].apply(lambda x: f"{x:,.0f}" if pd.notnull(x) else "0")
+            if 'Baseline Allocated Volume' in display_df.columns:
+                display_df['Baseline Allocated Volume'] = display_df['Baseline Allocated Volume'].apply(lambda x: f"{x:,.0f}" if pd.notnull(x) else "0")
+            if '2024 Volume (lbs)' in display_df.columns:
+                display_df['2024 Volume (lbs)'] = display_df['2024 Volume (lbs)'].apply(lambda x: f"{x:,.0f}" if pd.notnull(x) else "0")
+            
+            st.dataframe(display_df, use_container_width=True)
+        else:
+            st.warning("No detailed optimization results available.")
 
 def main():
     """Main application function."""
