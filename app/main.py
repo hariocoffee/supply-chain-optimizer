@@ -31,75 +31,291 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
+
 # Custom CSS for Apple-like minimalistic design
 st.markdown("""
 <style>
+    /* Apple-style silver gradient background */
+    .stApp {
+        background: linear-gradient(180deg, #ffffff 0%, #e8e8ed 100%) !important;
+        min-height: 100vh !important;
+    }
+    
+    [data-testid="stAppViewContainer"] {
+        background: linear-gradient(180deg, #ffffff 0%, #e8e8ed 100%) !important;
+        min-height: 100vh !important;
+    }
+    
+    [data-testid="stAppViewContainer"] > .main {
+        background: linear-gradient(180deg, #ffffff 0%, #e8e8ed 100%) !important;
+    }
+    
+    .main .block-container {
+        background: transparent !important;
+        padding-top: 2rem !important;
+    }
+    
+    /* Hide Streamlit branding and menu */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
+    
+    /* Override Streamlit's default dark mode */
+    [data-testid="stAppViewContainer"] {
+        background-color: #ffffff !important;
+    }
+    
+    [data-testid="stHeader"] {
+        background-color: #ffffff !important;
+    }
+    
+    [data-testid="stSidebar"] {
+        background-color: #fbfbfd !important;
+    }
+    
+    /* Typography - Apple style */
+    .main-title {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        font-weight: 600;
+        font-size: 48px;
+        line-height: 1.1;
+        letter-spacing: -0.02em;
+        color: #1d1d1f;
+        text-align: center;
+        margin-bottom: 16px;
+    }
+    
+    .main-subtitle {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        font-weight: 400;
+        font-size: 21px;
+        line-height: 1.4;
+        color: #86868b;
+        text-align: center;
+        margin-bottom: 48px;
+    }
+    
+    /* Main header section with silver gradient */
     .main-header {
         text-align: center;
-        padding: 2rem 0;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        border-radius: 10px;
-        margin-bottom: 2rem;
+        padding: 80px 0 20px 0;
+        background: linear-gradient(180deg, #ffffff 0%, #f5f5f7 100%);
+        margin-bottom: 20px;
     }
     
-    .action-button {
-        background: #007AFF;
-        color: white;
-        border: none;
-        padding: 12px 24px;
-        border-radius: 8px;
-        font-size: 16px;
-        margin: 8px;
-        cursor: pointer;
-        transition: all 0.3s ease;
+    /* Button styles - Apple design */
+    .stButton > button {
+        background: #0071e3 !important;
+        color: white !important;
+        border: none !important;
+        border-radius: 980px !important;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+        font-weight: 400 !important;
+        font-size: 17px !important;
+        line-height: 1.2 !important;
+        padding: 12px 22px !important;
+        min-height: 44px !important;
+        transition: all 0.15s ease !important;
+        text-transform: none !important;
+        letter-spacing: 0 !important;
+        margin: 0 auto !important;
+        display: block !important;
+        width: fit-content !important;
     }
     
-    .action-button:hover {
-        background: #0056CC;
-        transform: translateY(-2px);
+    .stButton > button:hover {
+        background: #0077ed !important;
+        transform: none !important;
+        box-shadow: none !important;
     }
     
-    .constraint-box {
-        background: #f8f9fa;
-        border: 1px solid #e9ecef;
-        border-radius: 8px;
-        padding: 1rem;
-        margin: 0.5rem 0;
+    .stButton > button:active {
+        background: #006edb !important;
     }
     
+    /* File uploader styling - minimalistic */
+    .stFileUploader {
+        border: 1px solid #d2d2d7 !important;
+        border-radius: 12px !important;
+        background: #ffffff !important;
+        padding: 24px !important;
+        text-align: center !important;
+    }
+    
+    .stFileUploader:hover {
+        border-color: #0071e3 !important;
+        background: #fbfbfd !important;
+    }
+    
+    .stFileUploader > div {
+        border: none !important;
+        background: transparent !important;
+    }
+    
+    .stFileUploader label {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+        font-size: 17px !important;
+        font-weight: 400 !important;
+        color: #1d1d1f !important;
+    }
+    
+    .stFileUploader small {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+        font-size: 13px !important;
+        color: #86868b !important;
+    }
+    
+    /* Metric cards with subtle gradient */
     .metric-card {
-        background: white;
-        border-radius: 10px;
-        padding: 1rem;
-        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        background: linear-gradient(180deg, #ffffff 0%, #fbfbfd 100%);
+        border: 1px solid #f5f5f7;
+        border-radius: 18px;
+        padding: 24px;
         text-align: center;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.06);
     }
     
-    .savings-positive {
-        color: #28a745;
-        font-weight: bold;
+    /* Data frame styling */
+    .stDataFrame {
+        border: 1px solid #f5f5f7;
+        border-radius: 12px;
+        overflow: hidden;
     }
     
-    .savings-negative {
-        color: #dc3545;
-        font-weight: bold;
-    }
-    
+    /* Tab styling */
     .stTabs [data-baseweb="tab-list"] {
-        gap: 24px;
+        gap: 8px;
+        background: #f5f5f7;
+        border-radius: 12px;
+        padding: 4px;
     }
     
     .stTabs [data-baseweb="tab"] {
-        height: 50px;
-        background: #f8f9fa;
+        height: 44px;
+        background: transparent;
         border-radius: 8px;
-        padding: 0 24px;
+        padding: 0 16px;
+        color: #1d1d1f;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        font-weight: 400;
+        font-size: 17px;
+        border: none;
     }
     
     .stTabs [aria-selected="true"] {
-        background: #007AFF;
-        color: white;
+        background: #ffffff;
+        color: #1d1d1f;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    
+    /* Section headers */
+    h2 {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+        font-weight: 600 !important;
+        font-size: 32px !important;
+        line-height: 1.125 !important;
+        letter-spacing: -0.01em !important;
+        color: #1d1d1f !important;
+        margin-top: 48px !important;
+        margin-bottom: 24px !important;
+    }
+    
+    h3 {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+        font-weight: 600 !important;
+        font-size: 24px !important;
+        line-height: 1.17 !important;
+        color: #1d1d1f !important;
+        margin-top: 32px !important;
+        margin-bottom: 16px !important;
+    }
+    
+    /* Text elements */
+    .stMarkdown p {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+        font-size: 17px !important;
+        line-height: 1.47 !important;
+        color: #1d1d1f !important;
+    }
+    
+    /* Info boxes */
+    .stInfo {
+        background: #f5f5f7 !important;
+        border: 1px solid #d2d2d7 !important;
+        border-radius: 12px !important;
+        color: #1d1d1f !important;
+    }
+    
+    .stSuccess {
+        background: #d4edda !important;
+        border: 1px solid #c3e6cb !important;
+        border-radius: 12px !important;
+        color: #155724 !important;
+    }
+    
+    .stWarning {
+        background: #fff3cd !important;
+        border: 1px solid #ffeaa7 !important;
+        border-radius: 12px !important;
+        color: #856404 !important;
+    }
+    
+    .stError {
+        background: #f8d7da !important;
+        border: 1px solid #f5c6cb !important;
+        border-radius: 12px !important;
+        color: #721c24 !important;
+    }
+    
+    /* Expander styling */
+    .streamlit-expanderHeader {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+        font-weight: 400 !important;
+        font-size: 17px !important;
+        color: #1d1d1f !important;
+        background: #fbfbfd !important;
+        border: 1px solid #f5f5f7 !important;
+        border-radius: 12px !important;
+    }
+    
+    /* Remove borders and box shadows for cleaner look */
+    .stContainer {
+        border: none !important;
+        box-shadow: none !important;
+    }
+    
+    /* Clean up sidebar with silver gradient */
+    .stSidebar {
+        background: linear-gradient(180deg, #f5f5f7 0%, #e8e8ed 100%);
+        border-right: 1px solid #d2d2d7;
+    }
+    
+    /* Input field styling */
+    .stNumberInput input {
+        border: 1px solid #d2d2d7 !important;
+        border-radius: 8px !important;
+        background: #ffffff !important;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+        font-size: 17px !important;
+    }
+    
+    /* Download button styling */
+    .stDownloadButton > button {
+        background: #ffffff !important;
+        color: #0071e3 !important;
+        border: 1px solid #0071e3 !important;
+        border-radius: 980px !important;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+        font-weight: 400 !important;
+        font-size: 17px !important;
+        padding: 12px 22px !important;
+        min-height: 44px !important;
+    }
+    
+    .stDownloadButton > button:hover {
+        background: #f5f5f7 !important;
+        color: #0077ed !important;
+        border-color: #0077ed !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -170,40 +386,71 @@ class SupplyChainOptimizer:
         # Header
         st.markdown("""
         <div class="main-header">
-            <h1>⚡ Supply Chain Optimizer</h1>
-            <p>Optimize your supply chain with AI-powered insights</p>
+            <h1 class="main-title">Supply Chain Optimizer</h1>
+            <p class="main-subtitle">Optimize your supply chain with AI-powered insights</p>
         </div>
         """, unsafe_allow_html=True)
         
-        # Main action buttons
-        col1, col2, col3 = st.columns([1, 1, 1])
-        
-        with col1:
-            if st.button("📥 Download Template", key="download_template"):
+        # Download Template button - truly centered
+        col1, col2, col3 = st.columns([2, 1, 2])
+        with col2:
+            if st.button("Download Template", key="download_template", use_container_width=True):
                 template_file = self.create_template_file()
                 st.download_button(
                     label="Download CSV Template",
                     data=template_file,
                     file_name="supply_chain_template.csv",
-                    mime="text/csv"
+                    mime="text/csv",
+                    use_container_width=True
                 )
         
-        with col2:
-            uploaded_file = st.file_uploader(
-                "📤 Upload File",
-                type=['csv', 'xlsx', 'xls'],
-                key="file_uploader"
-            )
+        # Upload File section - full width
+        st.markdown("### Upload Data File")
+        uploaded_file = st.file_uploader(
+            "Choose a CSV or Excel file",
+            type=['csv', 'xlsx', 'xls'],
+            key="file_uploader",
+            help="Upload your supply chain data file (CSV or Excel format)"
+        )
         
-        with col3:
-            if uploaded_file and st.button("➡️ Next", key="next_button"):
+        # Show Next button below upload area only when file is uploaded
+        if uploaded_file:
+            if st.button("Continue", key="next_button"):
                 self.process_uploaded_file(uploaded_file)
+                st.rerun()
         
-        # Process file and show constraints interface
+        # Everything below this point should be full width - no more columns
+        
+        # Show file processing status messages
+        if hasattr(st.session_state, 'file_processing_status'):
+            if st.session_state.file_processing_status.get('show_cache_message'):
+                st.info("This file has been optimized before. Previous results are available in the History tab.")
+            
+            if st.session_state.file_processing_status.get('show_success_message'):
+                filename = st.session_state.file_processing_status.get('filename', 'file')
+                st.success(f"File '{filename}' processed successfully!")
+        
+        # Show data preview
+        if st.session_state.data is not None:
+            df = st.session_state.data
+            with st.expander("Data Preview", expanded=True):
+                st.dataframe(df.head(10))
+                
+                col1, col2, col3, col4 = st.columns(4)
+                with col1:
+                    st.metric("Rows", df.shape[0])
+                with col2:
+                    st.metric("Columns", df.shape[1])
+                with col3:
+                    st.metric("Unique Plant-Product-Locations", df['Plant_Product_Location_ID'].nunique())
+                with col4:
+                    st.metric("Unique Suppliers", df['Supplier'].nunique())
+        
+        # Show constraints interface - full width
         if st.session_state.data is not None:
             self.show_constraints_interface()
         
-        # Show optimization button if constraints are set
+        # Show optimization button - full width
         if st.session_state.constraints_set:
             self.show_optimization_interface()
 
@@ -221,8 +468,6 @@ class SupplyChainOptimizer:
             
             # Check if this file has been processed before
             cached_result = self.cache_manager.get_cached_result(file_hash)
-            if cached_result:
-                st.info("💾 This file has been optimized before. Previous results are available in the History tab.")
             
             # Always clear current session results when uploading new file
             st.session_state.results = None
@@ -237,31 +482,22 @@ class SupplyChainOptimizer:
             st.session_state.file_hash = file_hash
             st.session_state.uploaded_file_name = uploaded_file.name
             
+            # Set status messages to be shown in main interface
+            st.session_state.file_processing_status = {
+                'show_cache_message': bool(cached_result),
+                'show_success_message': True,
+                'filename': uploaded_file.name
+            }
+            
             # Store in database
             self.db_manager.store_baseline_data(df, file_hash, uploaded_file.name)
-            
-            st.success(f"✅ File '{uploaded_file.name}' processed successfully!")
-            
-            # Show data preview
-            with st.expander("📊 Data Preview", expanded=True):
-                st.dataframe(df.head(10))
-                
-                col1, col2, col3, col4 = st.columns(4)
-                with col1:
-                    st.metric("Rows", df.shape[0])
-                with col2:
-                    st.metric("Columns", df.shape[1])
-                with col3:
-                    st.metric("Unique Plant-Product-Locations", df['Plant_Product_Location_ID'].nunique())
-                with col4:
-                    st.metric("Unique Suppliers", df['Supplier'].nunique())
                     
         except Exception as e:
             st.error(f"Error processing file: {str(e)}")
 
     def show_constraints_interface(self):
         """Show the constraints setting interface."""
-        st.markdown("## 🎯 Automatically Detected Constraints")
+        st.markdown("## Automatically Detected Constraints")
         
         df = st.session_state.data
         
@@ -269,7 +505,7 @@ class SupplyChainOptimizer:
         supplier_constraints = self.calculate_supplier_constraints(df)
         
         # Display detected constraints
-        st.markdown("### 📊 Supplier Constraints")
+        st.markdown("### Supplier Constraints")
         
         if not supplier_constraints:
             st.warning("Unable to detect supplier constraints. Please check your data format.")
@@ -293,8 +529,8 @@ class SupplyChainOptimizer:
         st.dataframe(constraints_df, use_container_width=True)
         
         # User-editable constraints
-        st.markdown("**📝 Edit Supplier Constraints:**")
-        st.info("💡 Modify the minimum and maximum volume constraints for each supplier. Leave unchanged to use auto-detected values.")
+        st.markdown("**Edit Supplier Constraints:**")
+        st.info("Modify the minimum and maximum volume constraints for each supplier. Leave unchanged to use auto-detected values.")
         
         # Create editable constraints interface
         edited_constraints = {}
@@ -338,14 +574,14 @@ class SupplyChainOptimizer:
             }
         
         # Info about plant requirements
-        st.markdown("### 🏭 Plant Requirements")
+        st.markdown("### Plant Requirements")
         st.info("**Each plant-product-location combination MUST receive its full allocated volume as specified in Column C (2024 Volume).**")
         
         plant_requirements = df.groupby(['Plant', 'Product', 'Plant Location'])['2024 Volume (lbs)'].first().reset_index()
         plant_requirements['Required Volume (lbs)'] = plant_requirements['2024 Volume (lbs)'].apply(lambda x: f"{x:,.0f}")
         st.dataframe(plant_requirements[['Plant', 'Product', 'Plant Location', 'Required Volume (lbs)']], use_container_width=True)
         
-        if st.button("✅ Apply Constraints", key="set_constraints"):
+        if st.button("Apply Constraints", key="set_constraints"):
             # Store edited constraints in session state
             st.session_state.supplier_constraints = edited_constraints
             st.session_state.plant_constraints = {}  # No plant constraints needed
@@ -358,7 +594,7 @@ class SupplyChainOptimizer:
                 {}  # No plant constraints
             )
             
-            st.success("✅ Supplier constraints applied successfully!")
+            st.success("Supplier constraints applied successfully!")
     
     def calculate_supplier_constraints(self, df):
         """Calculate supplier constraints from baseline data for supplier selection optimization."""
@@ -412,9 +648,9 @@ class SupplyChainOptimizer:
 
     def show_optimization_interface(self):
         """Show the optimization interface."""
-        st.markdown("## 🚀 Run Optimization")
+        st.markdown("## Run Optimization")
         
-        if st.button("🔄 Run Optimization", key="run_optimization"):
+        if st.button("Run Optimization", key="run_optimization"):
             with st.spinner("Running optimization... This may take a few minutes."):
                 # Trigger Airflow DAG
                 dag_run_id = self.airflow_client.trigger_optimization_dag(
@@ -422,7 +658,7 @@ class SupplyChainOptimizer:
                 )
                 
                 if dag_run_id:
-                    st.success(f"✅ Optimization started! DAG Run ID: {dag_run_id}")
+                    st.success(f"Optimization started! DAG Run ID: {dag_run_id}")
                     
                     # Create history entry for the attempt
                     history_entry = {
@@ -517,10 +753,10 @@ class SupplyChainOptimizer:
                             processed_results
                         )
                         
-                        st.success("✅ Optimization completed successfully!")
+                        st.success("Optimization completed successfully!")
                         
                         # Show success message and redirect to results tab
-                        st.info("🎉 Optimization complete! Check the **Results** tab to view detailed results, download data, and generate AI summaries.")
+                        st.info("Optimization complete! Check the **Results** tab to view detailed results, download data, and generate AI summaries.")
                     else:
                         # Update history entry with failure
                         history_entry.update({
@@ -532,12 +768,12 @@ class SupplyChainOptimizer:
                         # Clear previous results when optimization fails
                         st.session_state.results = None
                         st.session_state.optimization_complete = False
-                        st.error("❌ Optimization failed. Please check your constraints and try again.")
+                        st.error("Optimization failed. Please check your constraints and try again.")
                     
                     # Add to history regardless of success/failure
                     st.session_state.optimization_history.append(history_entry)
                 else:
-                    st.error("❌ Failed to start optimization process.")
+                    st.error("Failed to start optimization process.")
 
     def download_results(self):
         """Generate and download the results file."""
@@ -547,7 +783,7 @@ class SupplyChainOptimizer:
                 csv = results_df.to_csv(index=False)
                 
                 st.download_button(
-                    label="📥 Download Optimized Results CSV",
+                    label="Download Optimized Results CSV",
                     data=csv,
                     file_name=f"optimized_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
                     mime="text/csv",
@@ -590,12 +826,12 @@ class SupplyChainOptimizer:
         try:
             summary = self.query_ollama(prompt)
             
-            st.markdown("## 🤖 AI-Generated Analysis")
+            st.markdown("## AI-Generated Analysis")
             st.markdown(summary)
             
             # Download summary option
             st.download_button(
-                label="📥 Download AI Summary",
+                label="Download AI Summary",
                 data=summary,
                 file_name=f"ai_summary_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
                 mime="text/plain"
@@ -628,13 +864,13 @@ class SupplyChainOptimizer:
     def show_results_dashboard(self):
         """Show the results dashboard in a separate tab."""
         if not st.session_state.optimization_complete or not st.session_state.results:
-            st.info("🔄 Please complete the optimization process first.")
+            st.info("Please complete the optimization process first.")
             return
         
         results = st.session_state.results
         
         # Executive Summary
-        st.markdown("## 📊 Executive Summary")
+        st.markdown("## Executive Summary")
         
         col1, col2, col3, col4 = st.columns(4)
         
@@ -647,35 +883,35 @@ class SupplyChainOptimizer:
         
         with col2:
             plants_optimized = results['plants_optimized']
-            if st.button(f"🏭 Plants Optimized\n{plants_optimized}", key="plants_drill_down", help="Click to see detailed changes"):
+            if st.button(f"Plants Optimized\n{plants_optimized}", key="plants_drill_down", help="Click to see detailed changes"):
                 st.session_state.show_plants_detail = True
         
         with col3:
             suppliers_involved = results['suppliers_involved']
-            if st.button(f"🚚 Suppliers Involved\n{suppliers_involved}", key="suppliers_drill_down", help="Click to see supplier list"):
+            if st.button(f"Suppliers Involved\n{suppliers_involved}", key="suppliers_drill_down", help="Click to see supplier list"):
                 st.session_state.show_suppliers_detail = True
         
         with col4:
             volume_reallocated = results.get('volume_reallocated', 0)
-            if st.button(f"📦 Volume Reallocated\n{volume_reallocated:,.0f} lbs", key="volume_drill_down", help="Click to see volume changes"):
+            if st.button(f"Volume Reallocated\n{volume_reallocated:,.0f} lbs", key="volume_drill_down", help="Click to see volume changes"):
                 st.session_state.show_volume_detail = True
         
         # Drill-down sections
         self.show_drill_down_sections(results)
         
         # Download and AI Summary buttons
-        st.markdown("## 📊 Actions")
+        st.markdown("## Actions")
         col1, col2 = st.columns(2)
         
         with col1:
             self.download_results()
         
         with col2:
-            if st.button("🤖 Generate AI Summary", key="generate_ai_summary_tab"):
+            if st.button("Generate AI Summary", key="generate_ai_summary_tab"):
                 self.generate_ai_summary()
         
         # Before/After Comparison
-        st.markdown("## 📈 Before vs After Comparison")
+        st.markdown("## Before vs After Comparison")
         
         # Cost summary table
         if 'baseline_cost' in results and 'optimized_cost' in results:
@@ -720,16 +956,16 @@ class SupplyChainOptimizer:
             savings_pct = results.get('savings_percentage', 0)
             
             if savings > 0:
-                st.success(f"💰 **Total Savings: ${savings:,.2f} ({savings_pct:.1f}%)**")
+                st.success(f"**Total Savings: ${savings:,.2f} ({savings_pct:.1f}%)**")
             elif savings < 0:
-                st.warning(f"⚠️ **Additional Cost: ${abs(savings):,.2f} ({abs(savings_pct):.1f}%)**")
+                st.warning(f"**Additional Cost: ${abs(savings):,.2f} ({abs(savings_pct):.1f}%)**")
             else:
-                st.info("ℹ️ **No cost difference between baseline and optimized scenarios**")
+                st.info("**No cost difference between baseline and optimized scenarios**")
         else:
             st.warning("Cost comparison data not available.")
         
         # Detailed Changes Table
-        st.markdown("## 📋 Detailed Optimization Results")
+        st.markdown("## Detailed Optimization Results")
         
         if 'optimized_data' in results and results['optimized_data'] is not None:
             optimized_df = results['optimized_data']
@@ -771,7 +1007,7 @@ class SupplyChainOptimizer:
         # Plants Optimized Drill-down
         if st.session_state.get('show_plants_detail', False):
             st.markdown("---")
-            st.markdown("## 🏭 Plants Optimized - Detailed Changes")
+            st.markdown("## Plants Optimized - Detailed Changes")
             
             # Find all location switches for detailed display
             location_switches = []
@@ -794,7 +1030,7 @@ class SupplyChainOptimizer:
                     col1, col2 = st.columns(2)
                     
                     with col1:
-                        st.markdown("**🔴 BEFORE (Baseline)**")
+                        st.markdown("**BEFORE (Baseline)**")
                         before_data = {
                             'Plant': baseline_row['Plant'],
                             'Location': baseline_row['Plant Location'],
@@ -808,7 +1044,7 @@ class SupplyChainOptimizer:
                         st.dataframe(before_df, use_container_width=True)
                     
                     with col2:
-                        st.markdown("**🟢 AFTER (Optimized)**")
+                        st.markdown("**AFTER (Optimized)**")
                         after_data = {
                             'Plant': optimized_row['Plant'],
                             'Location': optimized_row['Plant Location'],
@@ -824,17 +1060,17 @@ class SupplyChainOptimizer:
                     # Show savings for this change
                     savings = baseline_row['Baseline Price Paid'] - optimized_row['Optimized Price']
                     savings_pct = (savings / baseline_row['Baseline Price Paid']) * 100 if baseline_row['Baseline Price Paid'] > 0 else 0
-                    st.success(f"💰 **Savings for this change: ${savings:,.2f} ({savings_pct:.1f}%)**")
+                    st.success(f"**Savings for this change: ${savings:,.2f} ({savings_pct:.1f}%)**")
                     st.markdown("---")
                 
-                if st.button("❌ Close Plants Detail", key="close_plants_detail"):
+                if st.button("Close Plants Detail", key="close_plants_detail"):
                     st.session_state.show_plants_detail = False
                     st.rerun()
         
         # Suppliers Involved Drill-down
         if st.session_state.get('show_suppliers_detail', False):
             st.markdown("---")
-            st.markdown("## 🚚 Suppliers Involved - Complete List")
+            st.markdown("## Suppliers Involved - Complete List")
             
             # Get all unique suppliers and standardize names
             all_suppliers = results_df['Supplier'].unique()
@@ -861,14 +1097,14 @@ class SupplyChainOptimizer:
             suppliers_df = pd.DataFrame(supplier_data)
             st.dataframe(suppliers_df, use_container_width=True)
             
-            if st.button("❌ Close Suppliers Detail", key="close_suppliers_detail"):
+            if st.button("Close Suppliers Detail", key="close_suppliers_detail"):
                 st.session_state.show_suppliers_detail = False
                 st.rerun()
         
         # Volume Reallocated Drill-down
         if st.session_state.get('show_volume_detail', False):
             st.markdown("---")
-            st.markdown("## 📦 Volume Reallocated - Detailed Changes")
+            st.markdown("## Volume Reallocated - Detailed Changes")
             
             # Same logic as Plants Optimized but focused on volume
             location_switches = []
@@ -886,7 +1122,7 @@ class SupplyChainOptimizer:
             
             if location_switches:
                 # Summary table first
-                st.markdown("### 📊 Volume Reallocation Summary")
+                st.markdown("### Volume Reallocation Summary")
                 summary_data = []
                 total_volume = 0
                 
@@ -908,14 +1144,14 @@ class SupplyChainOptimizer:
                 st.info(f"**Total Volume Reallocated: {total_volume:,.0f} lbs across {len(location_switches)} locations**")
                 
                 # Detailed before/after (same as Plants Optimized)
-                st.markdown("### 🔍 Detailed Before/After Comparison")
+                st.markdown("### Detailed Before/After Comparison")
                 
                 for i, (baseline_row, optimized_row) in enumerate(location_switches):
-                    with st.expander(f"📦 Volume Change #{i+1}: {baseline_row['Plant']} - {baseline_row['2024 Volume (lbs)']:,.0f} lbs"):
+                    with st.expander(f"Volume Change #{i+1}: {baseline_row['Plant']} - {baseline_row['2024 Volume (lbs)']:,.0f} lbs"):
                         col1, col2 = st.columns(2)
                         
                         with col1:
-                            st.markdown("**🔴 BEFORE (Baseline)**")
+                            st.markdown("**BEFORE (Baseline)**")
                             before_data = {
                                 'Supplier': baseline_row['Supplier'],
                                 'Volume (lbs)': f"{baseline_row['2024 Volume (lbs)']:,.0f}",
@@ -926,7 +1162,7 @@ class SupplyChainOptimizer:
                             st.dataframe(before_df, use_container_width=True)
                         
                         with col2:
-                            st.markdown("**🟢 AFTER (Optimized)**")
+                            st.markdown("**AFTER (Optimized)**")
                             after_data = {
                                 'Supplier': optimized_row['Supplier'],
                                 'Volume (lbs)': f"{optimized_row['Optimized Volume']:,.0f}",
@@ -936,28 +1172,28 @@ class SupplyChainOptimizer:
                             after_df = pd.DataFrame([after_data])
                             st.dataframe(after_df, use_container_width=True)
                 
-                if st.button("❌ Close Volume Detail", key="close_volume_detail"):
+                if st.button("Close Volume Detail", key="close_volume_detail"):
                     st.session_state.show_volume_detail = False
                     st.rerun()
 
     def show_optimization_history(self):
         """Show the optimization history in the History tab."""
-        st.markdown("## 📋 Optimization History")
+        st.markdown("## Optimization History")
         
         if not st.session_state.optimization_history:
-            st.info("🔄 No optimization history available. Run an optimization to see results here.")
+            st.info("No optimization history available. Run an optimization to see results here.")
             return
         
         # Display history in reverse chronological order (newest first)
         history_data = []
         for entry in reversed(st.session_state.optimization_history):
             # Format the entry for display
-            status_emoji = "✅" if entry['status'] == 'success' else "❌" if entry['status'] == 'failed' else "🔄"
+            status_display = entry['status'].title()
             savings_display = f"${entry['total_savings']:,.2f}" if entry['total_savings'] else "N/A"
             execution_time_display = f"{entry['execution_time']:.2f}s" if entry['execution_time'] else "N/A"
             
             history_data.append({
-                'Status': f"{status_emoji} {entry['status'].title()}",
+                'Status': status_display,
                 'Timestamp': entry['timestamp'],
                 'File Name': entry['file_name'],
                 'DAG Run ID': entry['dag_run_id'][:16] + "..." if len(entry['dag_run_id']) > 16 else entry['dag_run_id'],
@@ -984,7 +1220,7 @@ class SupplyChainOptimizer:
                 st.metric("Failed", failed_runs)
             
             # Clear history button
-            if st.button("🗑️ Clear History", key="clear_history"):
+            if st.button("Clear History", key="clear_history"):
                 st.session_state.optimization_history = []
                 st.success("History cleared!")
                 st.experimental_rerun()
@@ -996,7 +1232,7 @@ def main():
     app = SupplyChainOptimizer()
     
     # Create tabs
-    tab1, tab2, tab3 = st.tabs(["🏠 Main", "📊 Results", "📋 History"])
+    tab1, tab2, tab3 = st.tabs(["Main", "Results", "History"])
     
     with tab1:
         app.main_interface()
