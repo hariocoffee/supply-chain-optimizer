@@ -54,13 +54,16 @@ class PyomoOptimizer:
             
         except Exception as e:
             logger.error(f"Optimization error: {str(e)}")
+            import traceback
+            logger.error(f"Full traceback: {traceback.format_exc()}")
             return None
     
     def _validate_data(self, data: pd.DataFrame) -> bool:
-        """Validate input data."""
+        """Validate input data for supplier selection optimization."""
         required_columns = [
-            'Plant', 'Supplier', '2024 Volume (lbs)', 'DDP (USD)',
-            'Baseline Allocated Volume', 'Baseline Price Paid'
+            'Plant', 'Product', '2024 Volume (lbs)', 'Supplier', 'Plant Location',
+            'DDP (USD)', 'Baseline Allocated Volume', 'Baseline Price Paid',
+            'Plant_Product_Location_ID', 'Supplier_Plant_Product_Location_ID'
         ]
         
         for col in required_columns:
@@ -77,59 +80,93 @@ class PyomoOptimizer:
             logger.error("Found negative price values")
             return False
         
+        # Check that each plant-product-location combination has consistent demand
+        plant_product_locations = data.groupby('Plant_Product_Location_ID')['2024 Volume (lbs)'].nunique()
+        if (plant_product_locations > 1).any():
+            # Log which combinations have inconsistent volumes for debugging
+            inconsistent = plant_product_locations[plant_product_locations > 1]
+            for location_id in inconsistent.index:
+                location_data = data[data['Plant_Product_Location_ID'] == location_id]
+                volumes = location_data['2024 Volume (lbs)'].unique()
+                logger.error(f"Location {location_id} has inconsistent volumes: {volumes}")
+            logger.error("Inconsistent volume demands found for plant-product-location combinations")
+            return False
+        
+        # Check for duplicate supplier entries (same Plant+Product+Location+Supplier combination)
+        duplicate_check = data.groupby(['Plant_Product_Location_ID', 'Supplier']).size()
+        if (duplicate_check > 1).any():
+            duplicates = duplicate_check[duplicate_check > 1]
+            for (location_id, supplier), count in duplicates.items():
+                logger.error(f"Duplicate supplier entry: {supplier} appears {count} times for {location_id}")
+            logger.error("Found duplicate supplier entries for same plant-product-location combinations")
+            return False
+        
+        # Check that each plant-product-location has at least one supplier option
+        plant_locations = data['Plant_Product_Location_ID'].unique()
+        for plant_location in plant_locations:
+            suppliers = data[data['Plant_Product_Location_ID'] == plant_location]['Supplier'].unique()
+            if len(suppliers) == 0:
+                logger.error(f"No suppliers found for {plant_location}")
+                return False
+        
         return True
     
     def _prepare_optimization_data(self, data: pd.DataFrame, supplier_constraints: Dict, plant_constraints: Dict) -> Dict:
-        """Prepare data for optimization."""
+        """Prepare data for optimization with plant-product-location structure."""
         
-        # Create plant-supplier combinations with their constraints
+        # CRITICAL FIX: Optimize at Plant+Product+Location level, not Plant+Product level
+        # Each location has its own demand and must be satisfied exactly
+        
         combinations = []
-        plant_demands = {}
+        location_demands = {}
         
-        # Group by plant to get total demand per plant (Column C - 2024 Volume)
-        for plant in data['Plant'].unique():
-            plant_data = data[data['Plant'] == plant]
-            total_demand = plant_data['2024 Volume (lbs)'].iloc[0]  # Each plant must receive this exact volume
-            plant_demands[plant] = total_demand
+        # Group by Plant+Product+Location to get demand for each unique location
+        for location_id in data['Plant_Product_Location_ID'].unique():
+            location_data = data[data['Plant_Product_Location_ID'] == location_id]
+            # Each location has its own specific demand (Column C)
+            demand = location_data['2024 Volume (lbs)'].iloc[0]
+            location_demands[location_id] = demand
         
-        # Create valid combinations (plant-supplier pairs)
-        # Each row represents a potential supply relationship
+        # Create valid combinations (location-supplier pairs)
+        # Each row represents a potential supply relationship at the location level
         for _, row in data.iterrows():
-            plant = row['Plant']
+            location_id = row['Plant_Product_Location_ID']
             supplier = row['Supplier']
-            plant_demand = row['2024 Volume (lbs)']  # Total demand for this plant
+            demand = location_demands[location_id]  # Demand for this specific location
             price = row['DDP (USD)']
             
-            # The capacity for this supplier-plant combination is the full plant demand
-            # (the supplier could potentially supply the entire plant demand)
+            # The capacity for this supplier-location combination is the full location demand
             combinations.append({
-                'plant': plant,
+                'location': location_id,
                 'supplier': supplier,
-                'capacity': plant_demand,  # Max this supplier can supply to this plant
+                'capacity': demand,  # Max this supplier can supply to this location
                 'price': price,
                 'baseline_volume': row.get('Baseline Allocated Volume', 0),
-                'baseline_cost': row.get('Baseline Price Paid', 0)
+                'baseline_cost': row.get('Baseline Price Paid', 0),
+                'plant': row['Plant'],
+                'product': row['Product'],
+                'plant_product': row['Plant_Product_ID']
             })
         
-        plants = list(plant_demands.keys())
+        locations = list(location_demands.keys())
         suppliers = list(set([combo['supplier'] for combo in combinations]))
         
         return {
             'combinations': combinations,
-            'plants': plants,
+            'locations': locations,
             'suppliers': suppliers,
-            'plant_demands': plant_demands,
+            'location_demands': location_demands,
             'supplier_constraints': supplier_constraints,
             'plant_constraints': plant_constraints
         }
     
     def _build_model(self, opt_data: Dict) -> pyo.ConcreteModel:
-        """Build the Pyomo optimization model."""
+        """Build the Pyomo optimization model for location-supplier selection."""
         
         model = pyo.ConcreteModel()
         
         # Sets
-        model.plants = pyo.Set(initialize=opt_data['plants'])
+        model.locations = pyo.Set(initialize=opt_data['locations'])
         model.suppliers = pyo.Set(initialize=opt_data['suppliers'])
         
         # Create valid combinations
@@ -138,7 +175,7 @@ class PyomoOptimizer:
         price_dict = {}
         
         for combo in opt_data['combinations']:
-            key = (combo['plant'], combo['supplier'])
+            key = (combo['location'], combo['supplier'])
             valid_combinations.append(key)
             capacity_dict[key] = combo['capacity']
             price_dict[key] = combo['price']
@@ -148,43 +185,43 @@ class PyomoOptimizer:
         # Parameters
         model.capacity = pyo.Param(model.combinations, initialize=capacity_dict)
         model.price = pyo.Param(model.combinations, initialize=price_dict)
-        model.demand = pyo.Param(model.plants, initialize=opt_data['plant_demands'])
+        model.demand = pyo.Param(model.locations, initialize=opt_data['location_demands'])
         
         # Decision variables
         model.allocation = pyo.Var(model.combinations, domain=pyo.NonNegativeReals)
         
         # Objective function: minimize total cost
         def objective_rule(model):
-            return sum(model.allocation[p, s] * model.price[p, s] 
-                      for p, s in model.combinations)
+            return sum(model.allocation[loc, s] * model.price[loc, s] 
+                      for loc, s in model.combinations)
         
         model.objective = pyo.Objective(rule=objective_rule, sense=pyo.minimize)
         
         # Constraints
         
-        # 1. Demand satisfaction: each plant must receive its required volume
-        def demand_constraint_rule(model, plant):
-            return sum(model.allocation[plant, s] for s in model.suppliers 
-                      if (plant, s) in model.combinations) == model.demand[plant]
+        # 1. Demand satisfaction: each location must receive its required volume (Column C)
+        def demand_constraint_rule(model, location):
+            return sum(model.allocation[location, s] for s in model.suppliers 
+                      if (location, s) in model.combinations) == model.demand[location]
         
-        model.demand_constraint = pyo.Constraint(model.plants, rule=demand_constraint_rule)
+        model.demand_constraint = pyo.Constraint(model.locations, rule=demand_constraint_rule)
         
-        # 2. Capacity constraints: allocation cannot exceed supplier capacity
-        def capacity_constraint_rule(model, plant, supplier):
-            return model.allocation[plant, supplier] <= model.capacity[plant, supplier]
+        # 2. Capacity constraints: allocation cannot exceed supplier capacity for each location
+        def capacity_constraint_rule(model, location, supplier):
+            return model.allocation[location, supplier] <= model.capacity[location, supplier]
         
         model.capacity_constraint = pyo.Constraint(model.combinations, rule=capacity_constraint_rule)
         
         # 3. Supplier volume constraints
         def supplier_min_constraint_rule(model, supplier):
-            total_supply = sum(model.allocation[p, supplier] for p in model.plants 
-                             if (p, supplier) in model.combinations)
+            total_supply = sum(model.allocation[loc, supplier] for loc in model.locations 
+                             if (loc, supplier) in model.combinations)
             min_volume = opt_data['supplier_constraints'].get(supplier, {}).get('min', 0)
             return total_supply >= min_volume
         
         def supplier_max_constraint_rule(model, supplier):
-            total_supply = sum(model.allocation[p, supplier] for p in model.plants 
-                             if (p, supplier) in model.combinations)
+            total_supply = sum(model.allocation[loc, supplier] for loc in model.locations 
+                             if (loc, supplier) in model.combinations)
             max_volume = opt_data['supplier_constraints'].get(supplier, {}).get('max', float('inf'))
             return total_supply <= max_volume
         
@@ -210,10 +247,10 @@ class PyomoOptimizer:
                 
                 # Extract solution
                 solution = {}
-                for plant, supplier in model.combinations:
-                    allocation = pyo.value(model.allocation[plant, supplier])
+                for location, supplier in model.combinations:
+                    allocation = pyo.value(model.allocation[location, supplier])
                     if allocation > 0.001:  # Only include non-zero allocations
-                        solution[(plant, supplier)] = allocation
+                        solution[(location, supplier)] = allocation
                 
                 return {
                     'status': 'optimal',
@@ -230,57 +267,105 @@ class PyomoOptimizer:
             return None
     
     def _process_results(self, original_data: pd.DataFrame, solution: Dict, opt_data: Dict) -> Dict:
-        """Process optimization results and create output."""
+        """Process optimization results with proper location-level optimization and Plant+Product aggregation."""
         
         # Create results DataFrame
         results_df = original_data.copy()
         
         # Initialize optimization columns
-        results_df['Optimized Volume'] = 0
-        results_df['Optimized Price'] = 0
+        results_df['Optimized Volume'] = 0.0
+        results_df['Optimized Price'] = 0.0
         results_df['Optimized Selection'] = ''
-        results_df['Optimized Split'] = 0
+        results_df['Optimized Split'] = '0%'
+        results_df['Is_Optimized_Supplier'] = 0
+        results_df['Cost Savings'] = 0.0
+        results_df['Allocated_Cost_Savings'] = 0.0
         
-        # Fill in optimized allocations
+        # Get optimized allocations (now at location level)
         allocations = solution['allocations']
         
-        # Calculate plant totals for split percentages
-        plant_totals = {}
-        for (plant, supplier), volume in allocations.items():
-            if plant not in plant_totals:
-                plant_totals[plant] = 0
-            plant_totals[plant] += volume
-        
+        # Step 1: Fill in optimized volumes at location level
         for idx, row in results_df.iterrows():
-            plant = row['Plant']
+            location_id = row['Plant_Product_Location_ID']
             supplier = row['Supplier']
+            location_volume = row['2024 Volume (lbs)']  # Column C for this location
             
-            if (plant, supplier) in allocations:
-                optimized_volume = allocations[(plant, supplier)]
-                optimized_price = optimized_volume * row['DDP (USD)']
+            if (location_id, supplier) in allocations:
+                # This supplier gets allocation for this location
+                optimized_volume = allocations[(location_id, supplier)]
                 
+                # Column K = Optimized Volume (from optimization)
                 results_df.loc[idx, 'Optimized Volume'] = optimized_volume
-                results_df.loc[idx, 'Optimized Price'] = optimized_price
-                results_df.loc[idx, 'Optimized Selection'] = 'X'
                 
-                # Calculate split percentage based on plant total
-                plant_total = plant_totals.get(plant, 0)
-                if plant_total > 0:
-                    split_percentage = (optimized_volume / plant_total) * 100
+                # Column L = Column K × Column F (DDP)
+                optimized_price = optimized_volume * row['DDP (USD)']
+                results_df.loc[idx, 'Optimized Price'] = optimized_price
+                
+                # Mark as selected
+                results_df.loc[idx, 'Optimized Selection'] = 'X'
+                results_df.loc[idx, 'Is_Optimized_Supplier'] = 1
+                
+                # Column N = Optimized Split as percentage of location volume
+                if location_volume > 0:
+                    split_percentage = (optimized_volume / location_volume) * 100
                     results_df.loc[idx, 'Optimized Split'] = f"{split_percentage:.0f}%"
+                    results_df.loc[idx, 'Volume_Fraction'] = f"{split_percentage/100:.3f}"
                 else:
                     results_df.loc[idx, 'Optimized Split'] = "0%"
+                    results_df.loc[idx, 'Volume_Fraction'] = "0.000"
             else:
-                # No allocation for this supplier-plant combination
-                results_df.loc[idx, 'Optimized Volume'] = 0
-                results_df.loc[idx, 'Optimized Price'] = 0
+                # This supplier gets no allocation
+                results_df.loc[idx, 'Optimized Volume'] = 0.0
+                results_df.loc[idx, 'Optimized Price'] = 0.0
                 results_df.loc[idx, 'Optimized Selection'] = ''
                 results_df.loc[idx, 'Optimized Split'] = "0%"
+                results_df.loc[idx, 'Is_Optimized_Supplier'] = 0
+                results_df.loc[idx, 'Volume_Fraction'] = "0.000"
         
-        # Calculate cost savings for each row
-        results_df['Cost Savings'] = results_df['Baseline Price Paid'] - results_df['Optimized Price']
+        # Step 2: Calculate Plant-Product level aggregated costs and savings
+        plant_product_costs = {}
         
-        # Calculate total savings
+        for plant_product in results_df['Plant_Product_ID'].unique():
+            pp_rows = results_df[results_df['Plant_Product_ID'] == plant_product]
+            
+            # Calculate baseline and optimized costs for this plant-product (sum across all locations)
+            baseline_cost = pp_rows['Baseline Price Paid'].sum()
+            optimized_cost = pp_rows['Optimized Price'].sum()
+            total_savings = baseline_cost - optimized_cost
+            
+            plant_product_costs[plant_product] = {
+                'baseline_cost': baseline_cost,
+                'optimized_cost': optimized_cost,
+                'total_savings': total_savings
+            }
+            
+            # Update all rows for this plant-product with the same aggregated values
+            results_df.loc[results_df['Plant_Product_ID'] == plant_product, 'Plant_Product_Baseline_Cost'] = baseline_cost
+            results_df.loc[results_df['Plant_Product_ID'] == plant_product, 'Plant_Product_Optimized_Cost'] = optimized_cost
+            results_df.loc[results_df['Plant_Product_ID'] == plant_product, 'Plant_Product_Total_Savings'] = total_savings
+        
+        # Step 3: Allocate Plant-Product level savings to individual location-supplier combinations
+        for idx, row in results_df.iterrows():
+            plant_product = row['Plant_Product_ID']
+            optimized_volume = row['Optimized Volume']
+            total_savings = plant_product_costs[plant_product]['total_savings']
+            
+            # Calculate total Plant-Product optimized volume for proportion calculation
+            pp_rows = results_df[results_df['Plant_Product_ID'] == plant_product]
+            total_plant_product_optimized_volume = pp_rows['Optimized Volume'].sum()
+            
+            # Cost Savings at row level is generally 0 unless specified otherwise
+            results_df.loc[idx, 'Cost Savings'] = 0.0
+            
+            # Allocated Cost Savings is proportional to this location's volume within the Plant-Product
+            if optimized_volume > 0 and total_plant_product_optimized_volume > 0:
+                volume_proportion = optimized_volume / total_plant_product_optimized_volume
+                allocated_savings = total_savings * volume_proportion
+                results_df.loc[idx, 'Allocated_Cost_Savings'] = allocated_savings
+            else:
+                results_df.loc[idx, 'Allocated_Cost_Savings'] = 0.0
+        
+        # Calculate overall totals
         baseline_total_cost = results_df['Baseline Price Paid'].sum()
         optimized_total_cost = results_df['Optimized Price'].sum()
         total_savings = baseline_total_cost - optimized_total_cost
@@ -291,13 +376,15 @@ class PyomoOptimizer:
         for idx, row in results_df.iterrows():
             if row['Optimized Volume'] > 0:
                 detailed_results.append({
+                    'location': row['Plant_Product_Location_ID'],
+                    'plant_product': row['Plant_Product_ID'],
                     'plant': row['Plant'],
                     'supplier': row['Supplier'],
                     'baseline_volume': row['Baseline Allocated Volume'],
                     'optimized_volume': row['Optimized Volume'],
                     'baseline_cost': row['Baseline Price Paid'],
                     'optimized_cost': row['Optimized Price'],
-                    'cost_savings': row['Baseline Price Paid'] - row['Optimized Price'],
+                    'allocated_savings': row['Allocated_Cost_Savings'],
                     'volume_split': row['Optimized Split'],
                     'selection_flag': row['Optimized Selection'] == 'X'
                 })
@@ -311,7 +398,7 @@ class PyomoOptimizer:
             'optimized_total_cost': optimized_total_cost,
             'detailed_results': detailed_results,
             'optimization_summary': {
-                'total_plants': len(opt_data['plants']),
+                'total_locations': len(opt_data['locations']),
                 'total_suppliers': len(opt_data['suppliers']),
                 'total_combinations': len(opt_data['combinations']),
                 'selected_combinations': len([r for r in detailed_results if r['selection_flag']])
