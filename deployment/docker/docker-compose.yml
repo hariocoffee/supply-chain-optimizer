@@ -6,8 +6,8 @@ services:
     ports:
       - "8501:8501"
     volumes:
-      - ./data:/app/data
-      - ./cache:/app/cache
+      - ../../data:/app/data
+      - ../../cache:/app/cache
     environment:
       - PYTHONUNBUFFERED=1
     env_file:
@@ -26,7 +26,7 @@ services:
       - .env
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ../../database/init.sql:/docker-entrypoint-initdb.d/init.sql
     ports:
       - "5432:5432"
     restart: unless-stopped
@@ -70,11 +70,11 @@ services:
       - _AIRFLOW_WWW_USER_USERNAME=${AIRFLOW_USERNAME}
       - _AIRFLOW_WWW_USER_PASSWORD=${AIRFLOW_PASSWORD}
     volumes:
-      - ./deployment/airflow/dags:/opt/airflow/dags
-      - ./deployment/airflow/logs:/opt/airflow/logs
-      - ./deployment/airflow/plugins:/opt/airflow/plugins
-      - ./deployment/airflow/script/entrypoint.sh:/opt/airflow/script/entrypoint.sh
-      - ./data:/opt/airflow/data
+      - ../airflow/dags:/opt/airflow/dags
+      - ../airflow/logs:/opt/airflow/logs
+      - ../airflow/plugins:/opt/airflow/plugins
+      - ../airflow/script/entrypoint.sh:/opt/airflow/script/entrypoint.sh
+      - ../../data:/opt/airflow/data
     ports:
       - "8080:8080"
     restart: unless-stopped
@@ -94,10 +94,10 @@ services:
       - AIRFLOW__CORE__LOAD_EXAMPLES=false
       - AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK=true
     volumes:
-      - ./deployment/airflow/dags:/opt/airflow/dags
-      - ./deployment/airflow/logs:/opt/airflow/logs
-      - ./deployment/airflow/plugins:/opt/airflow/plugins
-      - ./data:/opt/airflow/data
+      - ../airflow/dags:/opt/airflow/dags
+      - ../airflow/logs:/opt/airflow/logs
+      - ../airflow/plugins:/opt/airflow/plugins
+      - ../../data:/opt/airflow/data
     restart: unless-stopped
 
 volumes:

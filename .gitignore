@@ -1,13 +1,12 @@
-# Environment files
-.env
-.env.local
-.env.production
-
-# Python
+# Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
 *$py.class
+
+# C extensions
 *.so
+
+# Distribution / packaging
 .Python
 build/
 develop-eggs/
@@ -21,32 +20,41 @@ parts/
 sdist/
 var/
 wheels/
+pip-wheel-metadata/
+share/python-wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+MANIFEST
+
+# PyInstaller
+#  Usually these files are written by a python script from a template
+#  before PyInstaller builds the exe, so as to inject date/other infos into it.
+*.manifest
+*.spec
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+
+# Environments
+.env
+.venv
 env/
 venv/
 ENV/
 env.bak/
 venv.bak/
-
-# Data files
-data/*
-!data/.gitkeep
-uploads/*
-!uploads/.gitkeep
-
-# Logs
-logs/*
-!logs/.gitkeep
-
-# Database
-*.db
-*.sqlite3
-
-# Cache
-cache/*
-!cache/.gitkeep
 
 # IDE
 .vscode/
@@ -61,13 +69,25 @@ Thumbs.db
 # Docker
 .dockerignore
 
-# Temporary files
-*.tmp
-*.temp
-temp/
+# Logs
+logs/
+airflow/logs/
+*.log
 
-# Airflow
-airflow/logs/*
-!airflow/logs/.gitkeep
-airflow/dags/__pycache__/
-airflow/plugins/__pycache__/
+# Cache
+cache/
+*.pkl
+
+# Data (sensitive files - exclude DEMO.csv)
+data/
+!data_files/input/DEMO.csv
+uploads/
+*.csv
+!DEMO.csv
+!data_files/input/DEMO.csv
+*.xlsx
+*.db
+
+# Temporary files
+tmp/
+temp/
